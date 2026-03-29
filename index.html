@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloth Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@200;300;400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0c;
+    --surface: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e6e3;
+    --text-dim: rgba(255,255,255,0.35);
+    --accent: #ff6b3d;
+    --accent-glow: rgba(255,107,61,0.3);
+    --tear: #ff2d55;
+    --wind: #3dd6ff;
+    --burn: #ff9500;
+    --pin-color: #a78bfa;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    cursor: default;
+    user-select: none;
+  }
+
+  canvas {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 1;
+  }
+
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: linear-gradient(to bottom, rgba(10,10,12,0.95), transparent);
+    pointer-events: none;
+  }
+  .topbar > * { pointer-events: auto; }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #ff3d6b);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .logo h1 {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 40%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .stats {
+    display: flex;
+    gap: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+  }
+  .stats span strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* Controls */
+  .controls-wrap {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(20,20,24,0.88);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 6px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 6px;
+  }
+  .ctrl-group + .ctrl-group {
+    border-left: 1px solid var(--border);
+  }
+
+  .ctrl-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-right: 6px;
+    white-space: nowrap;
+  }
+
+  .btn {
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+  }
+  .btn.active {
+    background: rgba(255,107,61,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 12px rgba(255,107,61,0.1);
+  }
+  .btn.active.tear-mode {
+    background: rgba(255,45,85,0.15);
+    border-color: var(--tear);
+    color: var(--tear);
+    box-shadow: 0 0 12px rgba(255,45,85,0.1);
+  }
+  .btn.active.burn-mode {
+    background: rgba(255,149,0,0.15);
+    border-color: var(--burn);
+    color: var(--burn);
+    box-shadow: 0 0 12px rgba(255,149,0,0.1);
+  }
+  .btn.active.pin-mode {
+    background: rgba(167,139,250,0.15);
+    border-color: var(--pin-color);
+    color: var(--pin-color);
+    box-shadow: 0 0 12px rgba(167,139,250,0.1);
+  }
+  .btn.active.wind-on {
+    background: rgba(61,214,255,0.12);
+    border-color: var(--wind);
+    color: var(--wind);
+    box-shadow: 0 0 12px rgba(61,214,255,0.1);
+  }
+  .btn.active.ball-on {
+    background: rgba(52,211,153,0.12);
+    border-color: #34d399;
+    color: #34d399;
+    box-shadow: 0 0 12px rgba(52,211,153,0.1);
+  }
+  .btn.active.pause-on {
+    background: rgba(251,191,36,0.12);
+    border-color: #fbbf24;
+    color: #fbbf24;
+  }
+  .btn-icon {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .btn-sm {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 11px;
+    border-radius: 7px;
+  }
+
+  .slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 60px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.1);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--text);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  }
+  .slider-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 24px;
+    text-align: right;
+  }
+
+  /* Hint */
+  .hint {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    text-align: center;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 1s ease;
+  }
+  .hint.hidden { opacity: 0; }
+  .hint h2 {
+    font-weight: 200;
+    font-size: 26px;
+    letter-spacing: -0.5px;
+    margin-bottom: 10px;
+    color: rgba(255,255,255,0.6);
+  }
+  .hint p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.25);
+    line-height: 2;
+  }
+  .hint kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* Mode indicator */
+  .mode-indicator {
+    position: fixed;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+  .mode-indicator.show { opacity: 1; }
+  .mode-indicator.grab {
+    color: var(--accent);
+    background: rgba(255,107,61,0.1);
+    border: 1px solid rgba(255,107,61,0.2);
+  }
+  .mode-indicator.tear {
+    color: var(--tear);
+    background: rgba(255,45,85,0.1);
+    border: 1px solid rgba(255,45,85,0.2);
+  }
+  .mode-indicator.burn {
+    color: var(--burn);
+    background: rgba(255,149,0,0.1);
+    border: 1px solid rgba(255,149,0,0.2);
+  }
+  .mode-indicator.pin {
+    color: var(--pin-color);
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+  }
+
+  /* Pause overlay */
+  .pause-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(251,191,36,0.5);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .pause-overlay.show { opacity: 1; }
+
+  /* ── Mobile UI ── */
+  .mobile-mode-bar, .mobile-fab, .mobile-sheet, .mobile-sheet-overlay { display: none; }
+
+  @media (max-width: 768px) {
+    .controls-wrap { display: none !important; }
+    .stats { display: none !important; }
+    .topbar { padding: 10px 16px; }
+    .logo h1 { font-size: 14px; }
+    .logo-icon { width: 26px; height: 26px; font-size: 12px; }
+    .hint h2 { font-size: 18px; }
+    .hint p { font-size: 9px; }
+    .hint kbd { font-size: 8px; }
+
+    .mobile-mode-bar {
+      display: flex;
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 11;
+      gap: 4px;
+      padding: 5px 6px;
+      background: rgba(20,20,24,0.92);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 6px 30px rgba(0,0,0,0.5);
+    }
+    .mobile-mode-bar .btn {
+      height: 44px;
+      padding: 0 16px;
+      font-size: 13px;
+      border-radius: 10px;
+    }
+
+    .mobile-fab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      z-index: 12;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: rgba(20,20,24,0.92);
+      backdrop-filter: blur(20px);
+      color: var(--text);
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      transition: transform 0.3s, background 0.3s;
+    }
+    .mobile-fab.open {
+      transform: rotate(45deg);
+      background: rgba(255,107,61,0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .mobile-sheet-overlay {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 11;
+      background: rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .mobile-sheet-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .mobile-sheet {
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 12;
+      max-height: 70vh;
+      overflow-y: auto;
+      background: rgba(16,16,20,0.97);
+      backdrop-filter: blur(24px);
+      border-top: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      padding: 12px 16px 24px;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .mobile-sheet.open {
+      transform: translateY(0);
+    }
+
+    .mobile-sheet .sheet-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.15);
+      margin: 0 auto 14px;
+    }
+
+    .mobile-sheet .sheet-section {
+      margin-bottom: 14px;
+    }
+    .mobile-sheet .sheet-section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    .mobile-sheet .sheet-section-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .mobile-sheet .btn {
+      height: 44px;
+      padding: 0 16px;
+      font-size: 13px;
+      border-radius: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
+      justify-content: center;
+    }
+    .mobile-sheet .btn-icon {
+      width: 44px;
+      height: 44px;
+      flex: 0 0 44px;
+      padding: 0;
+      font-size: 16px;
+    }
+
+    .mobile-sheet .sheet-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .mobile-sheet .sheet-slider-row .ctrl-label {
+      font-size: 9px;
+      margin-right: 0;
+      min-width: 36px;
+    }
+    .mobile-sheet .sheet-slider-row input[type="range"] {
+      flex: 1;
+      width: auto;
+    }
+    .mobile-sheet .sheet-slider-row .slider-val {
+      min-width: 28px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">~</div>
+    <h1>Cloth Simulator</h1>
+  </div>
+  <div class="stats">
+    <span>Points <strong id="stat-pts">0</strong></span>
+    <span>Constraints <strong id="stat-con">0</strong></span>
+    <span>FPS <strong id="stat-fps">0</strong></span>
+  </div>
+</div>
+
+<div class="hint" id="hint">
+  <h2>grab the fabric</h2>
+  <p>
+    <kbd>Drag</kbd> pull &nbsp;&middot;&nbsp;
+    <kbd>Right Click</kbd> tear &nbsp;&middot;&nbsp;
+    <kbd>W</kbd> wind &nbsp;&middot;&nbsp;
+    <kbd>Space</kbd> pause &nbsp;&middot;&nbsp;
+    <kbd>Arrows</kbd> gravity dir
+  </p>
+</div>
+
+<div class="mode-indicator" id="mode-ind">GRAB</div>
+<div class="pause-overlay" id="pause-overlay">PAUSED</div>
+
+<div class="controls-wrap">
+  <!-- Row 1: Scenes -->
+  <div class="ctrl-row" id="scene-row">
+    <div class="ctrl-group">
+      <span class="ctrl-label">Scene</span>
+      <button class="btn btn-sm active" id="scene-default" onclick="loadScene('default')">Default</button>
+      <button class="btn btn-sm" id="scene-flag" onclick="loadScene('flag')">Flag</button>
+      <button class="btn btn-sm" id="scene-curtain" onclick="loadScene('curtain')">Curtain</button>
+      <button class="btn btn-sm" id="scene-hammock" onclick="loadScene('hammock')">Hammock</button>
+      <button class="btn btn-sm" id="scene-web" onclick="loadScene('web')">Web</button>
+      <button class="btn btn-sm" id="scene-cape" onclick="loadScene('cape')">Cape</button>
+    </div>
+  </div>
+
+  <!-- Row 2: Tools -->
+  <div class="ctrl-row">
+    <div class="ctrl-group">
+      <span class="ctrl-label">Mode</span>
+      <button class="btn active" id="btn-grab" onclick="setMode('grab')">Grab</button>
+      <button class="btn" id="btn-tear" onclick="setMode('tear')">Tear</button>
+      <button class="btn" id="btn-burn" onclick="setMode('burn')">Burn</button>
+      <button class="btn" id="btn-pin" onclick="setMode('pin')">Pin</button>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Material</span>
+      <button class="btn btn-sm active" id="mat-cotton" onclick="setMaterial('cotton')">Cotton</button>
+      <button class="btn btn-sm" id="mat-silk" onclick="setMaterial('silk')">Silk</button>
+      <button class="btn btn-sm" id="mat-denim" onclick="setMaterial('denim')">Denim</button>
+      <button class="btn btn-sm" id="mat-chain" onclick="setMaterial('chain')">Chain</button>
+    </div>
+    <div class="ctrl-group">
+      <button class="btn btn-icon" id="btn-ball" onclick="toggleBall()">O</button>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Wind</span>
+      <button class="btn btn-icon" id="btn-wind" onclick="toggleWind()">~</button>
+      <div class="slider-wrap">
+        <input type="range" id="wind-str" min="0" max="100" value="40" oninput="updateWind()">
+        <span class="slider-val" id="wind-val">40</span>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Grav</span>
+      <div class="slider-wrap">
+        <input type="range" id="grav-str" min="0" max="200" value="90" oninput="updateGravity()">
+        <span class="slider-val" id="grav-val">0.9</span>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <button class="btn btn-icon" id="btn-slow" onclick="toggleSlow()">S</button>
+      <button class="btn btn-icon" id="btn-pause" onclick="togglePause()">||</button>
+      <button class="btn" onclick="resetCloth()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile UI -->
+<div class="mobile-mode-bar" id="mobile-mode-bar">
+  <button class="btn active" id="m-btn-grab" onclick="setMode('grab')">Grab</button>
+  <button class="btn" id="m-btn-tear" onclick="setMode('tear')">Tear</button>
+  <button class="btn" id="m-btn-burn" onclick="setMode('burn')">Burn</button>
+  <button class="btn" id="m-btn-pin" onclick="setMode('pin')">Pin</button>
+</div>
+
+<button class="mobile-fab" id="mobile-fab" onclick="toggleMobileMenu()">+</button>
+
+<div class="mobile-sheet-overlay" id="mobile-overlay" onclick="toggleMobileMenu()"></div>
+
+<div class="mobile-sheet" id="mobile-sheet">
+  <div class="sheet-handle"></div>
+
+  <div class="sheet-section">
+    <div class="sheet-section-label">Scene</div>
+    <div class="sheet-section-grid">
+      <button class="btn active" id="m-scene-default" onclick="loadScene('default')">Default</button>
+      <button class="btn" id="m-scene-flag" onclick="loadScene('flag')">Flag</button>
+      <button class="btn" id="m-scene-curtain" onclick="loadScene('curtain')">Curtain</button>
+      <button class="btn" id="m-scene-hammock" onclick="loadScene('hammock')">Hammock</button>
+      <button class="btn" id="m-scene-web" onclick="loadScene('web')">Web</button>
+      <button class="btn" id="m-scene-cape" onclick="loadScene('cape')">Cape</button>
+    </div>
+  </div>
+
+  <div class="sheet-section">
+    <div class="sheet-section-label">Material</div>
+    <div class="sheet-section-grid">
+      <button class="btn active" id="m-mat-cotton" onclick="setMaterial('cotton')">Cotton</button>
+      <button class="btn" id="m-mat-silk" onclick="setMaterial('silk')">Silk</button>
+      <button class="btn" id="m-mat-denim" onclick="setMaterial('denim')">Denim</button>
+      <button class="btn" id="m-mat-chain" onclick="setMaterial('chain')">Chain</button>
+    </div>
+  </div>
+
+  <div class="sheet-section">
+    <div class="sheet-section-label">Physics</div>
+    <div class="sheet-section-grid">
+      <button class="btn btn-icon" id="m-btn-ball" onclick="toggleBall()">O</button>
+      <button class="btn btn-icon" id="m-btn-wind" onclick="toggleWind()">~</button>
+    </div>
+    <div class="sheet-slider-row">
+      <span class="ctrl-label">Wind</span>
+      <input type="range" id="m-wind-str" min="0" max="100" value="40" oninput="syncSlider('wind', this.value)">
+      <span class="slider-val" id="m-wind-val">40</span>
+    </div>
+    <div class="sheet-slider-row">
+      <span class="ctrl-label">Grav</span>
+      <input type="range" id="m-grav-str" min="0" max="200" value="90" oninput="syncSlider('grav', this.value)">
+      <span class="slider-val" id="m-grav-val">0.9</span>
+    </div>
+  </div>
+
+  <div class="sheet-section">
+    <div class="sheet-section-label">Controls</div>
+    <div class="sheet-section-grid">
+      <button class="btn" id="m-btn-slow" onclick="toggleSlow()">Slow</button>
+      <button class="btn" id="m-btn-pause" onclick="togglePause()">Pause</button>
+      <button class="btn" onclick="resetCloth()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CANVAS
+// ============================================================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// ============================================================
+// MUTABLE CONFIG
+// ============================================================
+let cols = 65, rows = 40, spacing = 10;
+let stiffness = 0.95;
+let damping = 0.97;
+let tearDist = 999;
+let constraintIters = 20;
+let clothMass = 1;
+let clothColor = { r: 110, g: 115, b: 135 }; // base color
+
+const MOUSE_INFLUENCE = 30;
+const MOUSE_TEAR_RADIUS = 20;
+
+let gravity = 0.9;
+let gravityAngle = Math.PI / 2; // down
+let windOn = false;
+let windStrength = 0.4;
+let windTime = 0;
+let mode = 'grab';
+let paused = false;
+let slowMo = false;
+let currentScene = 'default';
+let currentMaterial = 'cotton';
+
+// ============================================================
+// MATERIALS
+// ============================================================
+const materials = {
+  cotton: { mass: 1, stiffness: 0.95, damping: 0.97, iters: 20, color: { r: 140, g: 145, b: 160 }, label: 'Cotton', burnDuration: 120, burnSpread: 0.015 },
+  silk:   { mass: 0.4, stiffness: 0.6, damping: 0.995, iters: 12, color: { r: 180, g: 200, b: 220 }, label: 'Silk', burnDuration: 80, burnSpread: 0.025 },
+  denim:  { mass: 2.5, stiffness: 0.98, damping: 0.93, iters: 25, color: { r: 60, g: 75, b: 130 }, label: 'Denim', burnDuration: 160, burnSpread: 0.01 },
+  chain:  { mass: 5, stiffness: 0.99, damping: 0.9, iters: 30, color: { r: 160, g: 165, b: 170 }, label: 'Chain Mail', burnDuration: 400, burnSpread: 0.004 },
+};
+
+function setMaterial(name) {
+  currentMaterial = name;
+  const m = materials[name];
+  clothMass = m.mass;
+  stiffness = m.stiffness;
+  damping = m.damping;
+  constraintIters = m.iters;
+  clothColor = { ...m.color };
+  // Update mass of existing points
+  for (const p of points) p.mass = m.mass;
+  // UI — sync desktop + mobile
+  document.querySelectorAll('[id^="mat-"], [id^="m-mat-"]').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('mat-' + name);
+  if (el) el.classList.add('active');
+  const mel = document.getElementById('m-mat-' + name);
+  if (mel) mel.classList.add('active');
+}
+
+// ============================================================
+// SCENES
+// ============================================================
+const scenes = {
+  default: {
+    cols: 65, rows: 40, spacing: 10,
+    pinFn: (x, y, cols) => y === 0 && x % 4 === 0,
+    startX: null, startY: 80,
+    wind: false, gravAngle: Math.PI / 2,
+  },
+  flag: {
+    cols: 50, rows: 35, spacing: 10,
+    pinFn: (x, y) => x === 0,
+    startX: 180, startY: 80,
+    wind: true, gravAngle: Math.PI / 2,
+  },
+  curtain: {
+    cols: 80, rows: 45, spacing: 9,
+    pinFn: (x, y) => y === 0,
+    startX: null, startY: 60,
+    wind: false, gravAngle: Math.PI / 2,
+  },
+  hammock: {
+    cols: 55, rows: 30, spacing: 11,
+    pinFn: (x, y, cols) => y === 0 && (x === 0 || x === cols - 1),
+    startX: null, startY: 100,
+    wind: false, gravAngle: Math.PI / 2,
+  },
+  web: {
+    cols: 45, rows: 45, spacing: 10,
+    pinFn: (x, y, cols, rows) => {
+      const cx = (cols - 1) / 2, cy = (rows - 1) / 2;
+      // Pin center
+      if (Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1) return true;
+      // Pin corners
+      if ((x === 0 || x === cols - 1) && (y === 0 || y === rows - 1)) return true;
+      // Pin edge midpoints
+      if (x === 0 && Math.abs(y - cy) < 1) return true;
+      if (x === cols - 1 && Math.abs(y - cy) < 1) return true;
+      if (y === 0 && Math.abs(x - cx) < 1) return true;
+      if (y === rows - 1 && Math.abs(x - cx) < 1) return true;
+      return false;
+    },
+    startX: null, startY: null, // center
+    wind: false, gravAngle: Math.PI / 2,
+  },
+  cape: {
+    cols: 40, rows: 50, spacing: 9,
+    pinFn: (x, y, cols) => y === 0 && x >= Math.floor(cols / 2) - 5 && x <= Math.floor(cols / 2) + 5,
+    startX: null, startY: 60,
+    wind: true, gravAngle: Math.PI / 2,
+  },
+};
+
+function loadScene(name) {
+  currentScene = name;
+  const s = scenes[name];
+  cols = s.cols; rows = s.rows; spacing = s.spacing;
+  gravityAngle = s.gravAngle;
+  if (s.wind) { windOn = true; } else { windOn = false; }
+  updateWindUI();
+  createCloth(s);
+  // UI — sync desktop + mobile
+  document.querySelectorAll('[id^="scene-"], [id^="m-scene-"]').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('scene-' + name);
+  if (el) el.classList.add('active');
+  const mel = document.getElementById('m-scene-' + name);
+  if (mel) mel.classList.add('active');
+}
+
+// ============================================================
+// COLLISION BALL
+// ============================================================
+let ballActive = false;
+let ball = { x: 0, y: 0, r: 60 };
+let ballDragging = false;
+
+function toggleBall() {
+  ballActive = !ballActive;
+  if (ballActive) {
+    ball.x = W / 2;
+    ball.y = H / 2;
+  }
+  document.getElementById('btn-ball').classList.toggle('active', ballActive);
+  document.getElementById('btn-ball').classList.toggle('ball-on', ballActive);
+  const mb = document.getElementById('m-btn-ball');
+  if (mb) { mb.classList.toggle('active', ballActive); mb.classList.toggle('ball-on', ballActive); }
+}
+
+function resolveBallCollision(p) {
+  if (!ballActive) return;
+  const dx = p.x - ball.x;
+  const dy = p.y - ball.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < ball.r && dist > 0) {
+    const nx = dx / dist;
+    const ny = dy / dist;
+    p.x = ball.x + nx * ball.r;
+    p.y = ball.y + ny * ball.r;
+  }
+}
+
+// ============================================================
+// FIRE & BURN
+// ============================================================
+let burningPoints = new Set();
+let burnTimers = new Map(); // pointIndex -> timer
+let fireParticles = [];
+const BURN_SPREAD_RATE = 0.015; // chance per frame to spread to neighbor
+const BURN_DURATION = 120; // frames before constraint dies
+
+function ignitePoint(idx) {
+  if (burningPoints.has(idx)) return;
+  burningPoints.add(idx);
+  burnTimers.set(idx, 0);
+}
+
+const MAX_FIRE_PARTICLES = 200;
+const MAX_SPARK_PARTICLES = 100;
+
+function updateFire() {
+  const toIgnite = [];
+
+  for (const idx of burningPoints) {
+    let timer = burnTimers.get(idx) || 0;
+    timer++;
+    burnTimers.set(idx, timer);
+
+    // Emit particles (capped)
+    const p = points[idx];
+    if (p && currentMaterial === 'chain') {
+      // Melt drips — heavier, falling downward
+      if (Math.random() < 0.25 && meltParticles.length < MAX_MELT_PARTICLES) {
+        meltParticles.push({
+          x: p.x + (Math.random() - 0.5) * 4,
+          y: p.y,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: 0.5 + Math.random() * 1.5,
+          life: 50 + Math.random() * 40,
+          maxLife: 90,
+          size: 1.5 + Math.random() * 2.5,
+          stretch: 1,
+        });
+      }
+      // Occasional small sparks from molten metal
+      if (Math.random() < 0.15 && fireParticles.length < MAX_FIRE_PARTICLES) {
+        fireParticles.push({
+          x: p.x + (Math.random() - 0.5) * 4,
+          y: p.y,
+          vx: (Math.random() - 0.5) * 2,
+          vy: -0.5 - Math.random() * 1,
+          life: 10 + Math.random() * 10,
+          maxLife: 20,
+          size: 1 + Math.random() * 1.5,
+        });
+      }
+    } else if (p && Math.random() < 0.4 && fireParticles.length < MAX_FIRE_PARTICLES) {
+      fireParticles.push({
+        x: p.x + (Math.random() - 0.5) * 6,
+        y: p.y,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: -1.5 - Math.random() * 2,
+        life: 30 + Math.random() * 20,
+        maxLife: 50,
+        size: 2 + Math.random() * 3,
+      });
+    }
+
+    // After burn duration, destroy connected constraints via adjacency list
+    const matBurnDuration = materials[currentMaterial].burnDuration;
+    if (timer > matBurnDuration) {
+      const neighbors = neighborMap.get(idx);
+      if (neighbors) {
+        for (const edge of neighbors) {
+          if (edge.constraint.active) {
+            edge.constraint.active = false;
+            spawnSparks(points[idx].x, points[idx].y, 2);
+          }
+        }
+      }
+      burningPoints.delete(idx);
+      burnTimers.delete(idx);
+      continue;
+    }
+
+    // Spread fire to neighbors via adjacency list
+    const neighbors = neighborMap.get(idx);
+    if (neighbors) {
+      for (const edge of neighbors) {
+        const matBurnSpread = materials[currentMaterial].burnSpread;
+        if (edge.constraint.active && !burningPoints.has(edge.neighbor) && Math.random() < matBurnSpread) {
+          toIgnite.push(edge.neighbor);
+        }
+      }
+    }
+  }
+
+  for (const idx of toIgnite) ignitePoint(idx);
+
+  // Update fire particles
+  for (let i = fireParticles.length - 1; i >= 0; i--) {
+    const fp = fireParticles[i];
+    fp.x += fp.vx;
+    fp.y += fp.vy;
+    fp.vy -= 0.02;
+    fp.life--;
+    if (fp.life <= 0) fireParticles.splice(i, 1);
+  }
+
+  // Update melt particles — fall with gravity, stretch over time
+  for (let i = meltParticles.length - 1; i >= 0; i--) {
+    const mp = meltParticles[i];
+    mp.x += mp.vx;
+    mp.y += mp.vy;
+    mp.vy += 0.06; // gravity pull
+    mp.vx *= 0.98;
+    mp.stretch = Math.min(mp.stretch + 0.04, 3); // elongate as it drips
+    mp.life--;
+    if (mp.life <= 0) meltParticles.splice(i, 1);
+  }
+}
+
+// ============================================================
+// TEAR SPARKS
+// ============================================================
+let meltParticles = [];
+const MAX_MELT_PARTICLES = 150;
+
+let sparkParticles = [];
+
+function spawnSparks(x, y, count) {
+  if (sparkParticles.length >= MAX_SPARK_PARTICLES) return;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 3;
+    sparkParticles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      life: 15 + Math.random() * 15,
+      maxLife: 30,
+      size: 1.5 + Math.random() * 1.5,
+    });
+  }
+}
+
+function updateSparks() {
+  for (let i = sparkParticles.length - 1; i >= 0; i--) {
+    const s = sparkParticles[i];
+    s.x += s.vx;
+    s.y += s.vy;
+    s.vy += 0.08;
+    s.vx *= 0.98;
+    s.life--;
+    if (s.life <= 0) sparkParticles.splice(i, 1);
+  }
+}
+
+// ============================================================
+// POINT & CONSTRAINT
+// ============================================================
+class Point {
+  constructor(x, y, pinned = false) {
+    this.x = x; this.y = y;
+    this.ox = x; this.oy = y;
+    this.pinned = pinned;
+    this.mass = clothMass;
+    this.ax = 0; this.ay = 0;
+  }
+  update(dt) {
+    if (this.pinned) return;
+    const vx = (this.x - this.ox) * damping;
+    const vy = (this.y - this.oy) * damping;
+    this.ox = this.x;
+    this.oy = this.y;
+    this.x += vx + this.ax * dt * dt;
+    this.y += vy + this.ay * dt * dt;
+    this.ax = 0; this.ay = 0;
+  }
+  applyForce(fx, fy) {
+    this.ax += fx / this.mass;
+    this.ay += fy / this.mass;
+  }
+  constrain() {
+    if (this.pinned) return;
+    if (this.y > H - 2) { this.y = H - 2; this.oy = this.y; }
+    if (this.x < 1) this.x = 1;
+    if (this.x > W - 1) this.x = W - 1;
+    if (this.y < 1) this.y = 1;
+  }
+}
+
+class Constraint {
+  constructor(p1, p2, i1, i2) {
+    this.p1 = p1; this.p2 = p2;
+    this.i1 = i1; this.i2 = i2;
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    this.restLength = Math.sqrt(dx * dx + dy * dy);
+    this.active = true;
+  }
+  solve() {
+    if (!this.active) return;
+    const dx = this.p2.x - this.p1.x;
+    const dy = this.p2.y - this.p1.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) return;
+    if (dist > this.restLength * tearDist) {
+      this.active = false;
+      spawnSparks((this.p1.x + this.p2.x) / 2, (this.p1.y + this.p2.y) / 2, 4);
+      return;
+    }
+    const diff = (this.restLength - dist) / dist * stiffness;
+    const ox = dx * diff * 0.5;
+    const oy = dy * diff * 0.5;
+    if (!this.p1.pinned) { this.p1.x -= ox; this.p1.y -= oy; }
+    if (!this.p2.pinned) { this.p2.x += ox; this.p2.y += oy; }
+  }
+}
+
+// ============================================================
+// CLOTH CREATION
+// ============================================================
+let points = [];
+let constraints = [];
+// Build a fast lookup for connection checks
+let connectionSet = new Set();
+
+function buildConnectionSet() {
+  connectionSet.clear();
+  for (const c of constraints) {
+    if (!c.active) continue;
+    connectionSet.add(c.i1 * 100000 + c.i2);
+    connectionSet.add(c.i2 * 100000 + c.i1);
+  }
+}
+
+// Adjacency list: pointIndex -> [{ constraint, neighborIndex }]
+let neighborMap = new Map();
+
+function createCloth(sceneConfig) {
+  const s = sceneConfig || scenes[currentScene];
+  points = [];
+  constraints = [];
+  burningPoints.clear();
+  burnTimers.clear();
+  fireParticles = [];
+  sparkParticles = [];
+  meltParticles = [];
+
+  let startX = s.startX;
+  let startY = s.startY;
+
+  if (startX === null) startX = (W - (cols - 1) * spacing) / 2;
+  if (startY === null) startY = (H - (rows - 1) * spacing) / 2;
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const pinned = s.pinFn(x, y, cols, rows);
+      const p = new Point(startX + x * spacing, startY + y * spacing, pinned);
+      points.push(p);
+    }
+  }
+
+  // Horizontal
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols - 1; x++) {
+      const i1 = y * cols + x, i2 = y * cols + x + 1;
+      constraints.push(new Constraint(points[i1], points[i2], i1, i2));
+    }
+  }
+  // Vertical
+  for (let y = 0; y < rows - 1; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i1 = y * cols + x, i2 = (y + 1) * cols + x;
+      constraints.push(new Constraint(points[i1], points[i2], i1, i2));
+    }
+  }
+
+  // Build adjacency list for fire spread
+  neighborMap.clear();
+  for (const c of constraints) {
+    if (!neighborMap.has(c.i1)) neighborMap.set(c.i1, []);
+    if (!neighborMap.has(c.i2)) neighborMap.set(c.i2, []);
+    neighborMap.get(c.i1).push({ constraint: c, neighbor: c.i2 });
+    neighborMap.get(c.i2).push({ constraint: c, neighbor: c.i1 });
+  }
+
+  buildConnectionSet();
+  updateStats();
+}
+
+function resetCloth() {
+  loadScene(currentScene);
+  setMaterial(currentMaterial);
+  document.getElementById('hint').classList.remove('hidden');
+  setTimeout(() => document.getElementById('hint').classList.add('hidden'), 3000);
+}
+
+// ============================================================
+// MOUSE / TOUCH
+// ============================================================
+let mouse = { x: 0, y: 0, px: 0, py: 0, down: false, button: 0 };
+let dragged = null;
+
+canvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  mouse.down = true;
+  mouse.button = e.button;
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  mouse.px = e.clientX;
+  mouse.py = e.clientY;
+  document.getElementById('hint').classList.add('hidden');
+
+  // Shift+click = drag ball
+  if (e.shiftKey && ballActive) {
+    const dx = mouse.x - ball.x, dy = mouse.y - ball.y;
+    if (dx * dx + dy * dy < ball.r * ball.r) {
+      ballDragging = true;
+      return;
+    }
+  }
+
+  if (mode === 'pin' && e.button === 0) {
+    handlePin(mouse.x, mouse.y);
+    return;
+  }
+
+  if (mode === 'burn' && e.button === 0) {
+    handleBurn(mouse.x, mouse.y);
+    return;
+  }
+
+  if ((mode === 'grab') && e.button === 0) {
+    dragged = [];
+    const radius = MOUSE_INFLUENCE * 2;
+    for (const p of points) {
+      if (p.pinned) continue;
+      const dx = p.x - mouse.x, dy = p.y - mouse.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < radius) {
+        const influence = 1 - d / radius;
+        dragged.push({ p, ox: p.x - mouse.x, oy: p.y - mouse.y, influence });
+      }
+    }
+    if (dragged.length === 0) dragged = null;
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = e.clientX; mouse.y = e.clientY;
+
+  if (ballDragging) {
+    ball.x = mouse.x;
+    ball.y = mouse.y;
+    return;
+  }
+
+  if (mouse.down) {
+    if (mode === 'tear' || mouse.button === 2) {
+      tearAt(mouse.x, mouse.y);
+    } else if (mode === 'burn') {
+      handleBurn(mouse.x, mouse.y);
+    } else if (mode === 'grab' && dragged) {
+      for (const g of dragged) {
+        const tx = mouse.x + g.ox;
+        const ty = mouse.y + g.oy;
+        g.p.x += (tx - g.p.x) * g.influence;
+        g.p.y += (ty - g.p.y) * g.influence;
+      }
+    }
+  }
+});
+
+canvas.addEventListener('mouseup', () => { mouse.down = false; dragged = null; ballDragging = false; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Touch
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.down = true; mouse.button = 0;
+  mouse.x = t.clientX; mouse.y = t.clientY;
+  mouse.px = t.clientX; mouse.py = t.clientY;
+  document.getElementById('hint').classList.add('hidden');
+
+  if (mode === 'pin') { handlePin(mouse.x, mouse.y); return; }
+  if (mode === 'burn') { handleBurn(mouse.x, mouse.y); return; }
+
+  if (mode === 'grab') {
+    dragged = [];
+    const radius = MOUSE_INFLUENCE * 2.5;
+    for (const p of points) {
+      if (p.pinned) continue;
+      const dx = p.x - mouse.x, dy = p.y - mouse.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < radius) {
+        const influence = 1 - d / radius;
+        dragged.push({ p, ox: p.x - mouse.x, oy: p.y - mouse.y, influence });
+      }
+    }
+    if (dragged.length === 0) dragged = null;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = t.clientX; mouse.y = t.clientY;
+  if (mode === 'tear') tearAt(mouse.x, mouse.y);
+  else if (mode === 'burn') handleBurn(mouse.x, mouse.y);
+  else if (dragged) {
+    for (const g of dragged) {
+      const tx = mouse.x + g.ox;
+      const ty = mouse.y + g.oy;
+      g.p.x += (tx - g.p.x) * g.influence;
+      g.p.y += (ty - g.p.y) * g.influence;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { mouse.down = false; dragged = null; });
+
+function tearAt(x, y) {
+  for (const c of constraints) {
+    if (!c.active) continue;
+    const mx = (c.p1.x + c.p2.x) / 2, my = (c.p1.y + c.p2.y) / 2;
+    const dx = mx - x, dy = my - y;
+    if (dx * dx + dy * dy < MOUSE_TEAR_RADIUS * MOUSE_TEAR_RADIUS) {
+      c.active = false;
+      spawnSparks(mx, my, 3);
+    }
+  }
+}
+
+function handlePin(x, y) {
+  let minDist = MOUSE_INFLUENCE;
+  let closest = null;
+  for (const p of points) {
+    const dx = p.x - x, dy = p.y - y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < minDist) { minDist = d; closest = p; }
+  }
+  if (closest) {
+    closest.pinned = !closest.pinned;
+    if (closest.pinned) { closest.ox = closest.x; closest.oy = closest.y; }
+  }
+}
+
+function handleBurn(x, y) {
+  let minDist = MOUSE_INFLUENCE;
+  let closest = -1;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const dx = p.x - x, dy = p.y - y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < minDist) { minDist = d; closest = i; }
+  }
+  if (closest >= 0) ignitePoint(closest);
+}
+
+// ============================================================
+// KEYBOARD
+// ============================================================
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'w' || e.key === 'W') toggleWind();
+  if (e.key === 't' || e.key === 'T') setMode(mode === 'tear' ? 'grab' : 'tear');
+  if (e.key === 'b' || e.key === 'B') setMode(mode === 'burn' ? 'grab' : 'burn');
+  if (e.key === 'p' || e.key === 'P') setMode(mode === 'pin' ? 'grab' : 'pin');
+  if (e.key === 'r' || e.key === 'R') resetCloth();
+  if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  // Arrow keys for gravity direction
+  if (e.key === 'ArrowDown') gravityAngle = Math.PI / 2;
+  if (e.key === 'ArrowUp') gravityAngle = -Math.PI / 2;
+  if (e.key === 'ArrowLeft') gravityAngle = Math.PI;
+  if (e.key === 'ArrowRight') gravityAngle = 0;
+});
+
+// ============================================================
+// CONTROLS
+// ============================================================
+function setMode(m) {
+  mode = m;
+  const modes = ['grab', 'tear', 'burn', 'pin'];
+  modes.forEach(md => {
+    ['btn-', 'm-btn-'].forEach(prefix => {
+      const el = document.getElementById(prefix + md);
+      if (!el) return;
+      el.classList.remove('active', 'tear-mode', 'burn-mode', 'pin-mode');
+      if (md === m) {
+        el.classList.add('active');
+        if (md === 'tear') el.classList.add('tear-mode');
+        if (md === 'burn') el.classList.add('burn-mode');
+        if (md === 'pin') el.classList.add('pin-mode');
+      }
+    });
+  });
+  const ind = document.getElementById('mode-ind');
+  ind.textContent = m.toUpperCase();
+  ind.className = 'mode-indicator show ' + m;
+  clearTimeout(ind._timeout);
+  ind._timeout = setTimeout(() => ind.classList.remove('show'), 1200);
+}
+
+function toggleWind() {
+  windOn = !windOn;
+  updateWindUI();
+}
+function updateWindUI() {
+  ['btn-wind', 'm-btn-wind'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.toggle('active', windOn); el.classList.toggle('wind-on', windOn); }
+  });
+}
+function updateWind() {
+  windStrength = document.getElementById('wind-str').value / 100;
+  const v = document.getElementById('wind-str').value;
+  document.getElementById('wind-val').textContent = v;
+  document.getElementById('m-wind-str').value = v;
+  document.getElementById('m-wind-val').textContent = v;
+}
+function updateGravity() {
+  const v = document.getElementById('grav-str').value;
+  gravity = v / 100;
+  const display = gravity.toFixed(1);
+  document.getElementById('grav-val').textContent = display;
+  document.getElementById('m-grav-str').value = v;
+  document.getElementById('m-grav-val').textContent = display;
+}
+function syncSlider(type, val) {
+  if (type === 'wind') {
+    document.getElementById('wind-str').value = val;
+    windStrength = val / 100;
+    document.getElementById('wind-val').textContent = val;
+    document.getElementById('m-wind-val').textContent = val;
+  } else if (type === 'grav') {
+    document.getElementById('grav-str').value = val;
+    gravity = val / 100;
+    const display = gravity.toFixed(1);
+    document.getElementById('grav-val').textContent = display;
+    document.getElementById('m-grav-val').textContent = display;
+  }
+}
+function togglePause() {
+  paused = !paused;
+  ['btn-pause', 'm-btn-pause'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.toggle('active', paused); el.classList.toggle('pause-on', paused); }
+  });
+  document.getElementById('pause-overlay').classList.toggle('show', paused);
+}
+function toggleSlow() {
+  slowMo = !slowMo;
+  ['btn-slow', 'm-btn-slow'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.toggle('active', slowMo); el.classList.toggle('pause-on', slowMo); }
+  });
+}
+function toggleMobileMenu() {
+  document.getElementById('mobile-sheet').classList.toggle('open');
+  document.getElementById('mobile-overlay').classList.toggle('open');
+  document.getElementById('mobile-fab').classList.toggle('open');
+}
+
+function updateStats() {
+  document.getElementById('stat-pts').textContent = points.length;
+  document.getElementById('stat-con').textContent = constraints.filter(c => c.active).length;
+}
+
+// ============================================================
+// SIMULATION
+// ============================================================
+function simulate() {
+  if (paused) return;
+  const steps = slowMo ? 1 : 1;
+  const dt = slowMo ? 0.25 : 1;
+  windTime += 0.02 * dt;
+
+  const gx = Math.cos(gravityAngle) * gravity;
+  const gy = Math.sin(gravityAngle) * gravity;
+
+  for (const p of points) {
+    // Gravity is acceleration (F=mg, a=g) — independent of mass
+    p.ax += gx;
+    p.ay += gy;
+    if (windOn) {
+      // Wind is a force — heavier materials resist it more (divided by mass in applyForce)
+      const wx = Math.sin(windTime + p.y * 0.02) * windStrength * 1.5;
+      const wy = Math.cos(windTime * 0.7 + p.x * 0.015) * windStrength * 0.3;
+      p.applyForce(wx, wy);
+    }
+  }
+
+  for (const p of points) p.update(dt);
+
+  for (let i = 0; i < constraintIters; i++) {
+    for (const c of constraints) c.solve();
+  }
+
+  // Ball collision
+  if (ballActive) {
+    for (const p of points) resolveBallCollision(p);
+  }
+
+  for (const p of points) p.constrain();
+
+  // Re-assert grab positions after physics solving
+  if (dragged) {
+    for (const g of dragged) {
+      const tx = mouse.x + g.ox;
+      const ty = mouse.y + g.oy;
+      g.p.x += (tx - g.p.x) * g.influence;
+      g.p.y += (ty - g.p.y) * g.influence;
+      g.p.ox = g.p.x;
+      g.p.oy = g.p.y;
+    }
+  }
+
+  // Fire
+  updateFire();
+  updateSparks();
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function isConnected(i1, i2) {
+  return connectionSet.has(i1 * 100000 + i2);
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background grid — single batched path
+  ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const gs = 40;
+  for (let x = gs; x < W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = gs; y < H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+
+  // Rebuild connection set for rendering
+  buildConnectionSet();
+
+  // Shadow pass — single batched path
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = 'rgba(0,0,0,1)';
+  ctx.beginPath();
+  for (let y = 0; y < rows - 1; y++) {
+    for (let x = 0; x < cols - 1; x++) {
+      const i = y * cols + x;
+      const p1 = points[i], p2 = points[i + 1], p3 = points[i + cols], p4 = points[i + cols + 1];
+      if (isConnected(i, i + 1) && isConnected(i, i + cols)) {
+        ctx.moveTo(p1.x + 12, p1.y + 18);
+        ctx.lineTo(p2.x + 12, p2.y + 18);
+        ctx.lineTo(p3.x + 12, p3.y + 18);
+      }
+      if (isConnected(i + 1, i + cols + 1) && isConnected(i + cols, i + cols + 1)) {
+        ctx.moveTo(p2.x + 12, p2.y + 18);
+        ctx.lineTo(p4.x + 12, p4.y + 18);
+        ctx.lineTo(p3.x + 12, p3.y + 18);
+      }
+    }
+  }
+  ctx.fill();
+  ctx.restore();
+
+  // Cloth triangles
+  for (let y = 0; y < rows - 1; y++) {
+    for (let x = 0; x < cols - 1; x++) {
+      const i = y * cols + x;
+      const p1 = points[i], p2 = points[i + 1], p3 = points[i + cols], p4 = points[i + cols + 1];
+      if (isConnected(i, i + 1) && isConnected(i, i + cols)) drawTriangle(p1, p2, p3, x, y);
+      if (isConnected(i + 1, i + cols + 1) && isConnected(i + cols, i + cols + 1)) drawTriangle(p2, p4, p3, x, y);
+    }
+  }
+
+  // Constraint lines — batched into single path
+  ctx.lineWidth = 0.4;
+  ctx.strokeStyle = `rgba(${clothColor.r + 40},${clothColor.g + 40},${clothColor.b + 30},0.06)`;
+  ctx.beginPath();
+  for (const c of constraints) {
+    if (!c.active) continue;
+    ctx.moveTo(c.p1.x, c.p1.y);
+    ctx.lineTo(c.p2.x, c.p2.y);
+  }
+  ctx.stroke();
+
+  // Pin points
+  for (const p of points) {
+    if (p.pinned) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(167,139,250,0.7)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(167,139,250,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  // Burning points glow
+  for (const idx of burningPoints) {
+    const p = points[idx];
+    if (!p) continue;
+    const timer = burnTimers.get(idx) || 0;
+    const progress = timer / materials[currentMaterial].burnDuration;
+
+    if (currentMaterial === 'chain') {
+      // Molten metal glow — white-hot center, orange-red edge
+      const glow = 6 + Math.sin(timer * 0.15) * 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, glow, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
+      const whiteHeat = Math.floor(255 - progress * 60);
+      grad.addColorStop(0, `rgba(${whiteHeat},${Math.floor(200 - progress * 80)},${Math.floor(120 - progress * 100)},${0.8 - progress * 0.2})`);
+      grad.addColorStop(0.5, `rgba(255,${Math.floor(120 - progress * 60)},0,${0.5 - progress * 0.2})`);
+      grad.addColorStop(1, 'rgba(200,60,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    } else {
+      const glow = 8 + Math.sin(timer * 0.3) * 4;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, glow, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
+      grad.addColorStop(0, `rgba(255,${Math.floor(200 - progress * 150)},0,${0.6 - progress * 0.3})`);
+      grad.addColorStop(1, 'rgba(255,80,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+  }
+
+  // Fire particles
+  for (const fp of fireParticles) {
+    const t = fp.life / fp.maxLife;
+    const r = 255, g = Math.floor(150 + t * 100), b = Math.floor(t * 50);
+    ctx.beginPath();
+    ctx.arc(fp.x, fp.y, fp.size * t, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${r},${g},${b},${t * 0.8})`;
+    ctx.fill();
+  }
+
+  // Spark particles
+  for (const s of sparkParticles) {
+    const t = s.life / s.maxLife;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size * t, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,${Math.floor(200 + t * 55)},${Math.floor(150 + t * 100)},${t})`;
+    ctx.fill();
+  }
+
+  // Melt drip particles — elongated falling drops of molten metal
+  for (const mp of meltParticles) {
+    const t = mp.life / mp.maxLife;
+    ctx.save();
+    ctx.translate(mp.x, mp.y);
+    ctx.scale(1, mp.stretch);
+    ctx.beginPath();
+    ctx.arc(0, 0, mp.size * (0.4 + t * 0.6), 0, Math.PI * 2);
+    // White-hot when fresh, cooling to orange-red
+    const r = 255;
+    const g = Math.floor(180 * t + 60 * (1 - t));
+    const b = Math.floor(120 * t);
+    ctx.fillStyle = `rgba(${r},${g},${b},${t * 0.9})`;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Collision ball
+  if (ballActive) {
+    const grad = ctx.createRadialGradient(ball.x - ball.r * 0.3, ball.y - ball.r * 0.3, ball.r * 0.1, ball.x, ball.y, ball.r);
+    grad.addColorStop(0, 'rgba(80,90,100,0.5)');
+    grad.addColorStop(0.7, 'rgba(50,55,65,0.4)');
+    grad.addColorStop(1, 'rgba(30,35,40,0.2)');
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Ball shadow
+    ctx.beginPath();
+    ctx.ellipse(ball.x + 8, ball.y + ball.r + 10, ball.r * 0.8, 8, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.fill();
+    // Shift hint
+    ctx.font = '9px "JetBrains Mono"';
+    ctx.fillStyle = 'rgba(52,211,153,0.3)';
+    ctx.textAlign = 'center';
+    ctx.fillText('SHIFT+DRAG', ball.x, ball.y + ball.r + 28);
+  }
+
+  // Cursor effects
+  if (mouse.down && mode === 'tear') {
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, MOUSE_TEAR_RADIUS, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,45,85,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,45,85,0.8)';
+    ctx.fill();
+  } else if (mouse.down && mode === 'burn') {
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, MOUSE_INFLUENCE, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,149,0,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  } else if (mouse.down && dragged) {
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,107,61,0.8)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 12, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,107,61,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Wind indicator
+  if (windOn) {
+    const wx = W - 80, wy = 80;
+    const angle = Math.sin(windTime) * 0.3;
+    const len = 25 + windStrength * 25;
+    ctx.save();
+    ctx.translate(wx, wy);
+    ctx.rotate(angle);
+    ctx.strokeStyle = `rgba(61,214,255,${0.3 + windStrength * 0.4})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(len / 2, 0); ctx.lineTo(len / 2 - 7, -4);
+    ctx.moveTo(len / 2, 0); ctx.lineTo(len / 2 - 7, 4); ctx.stroke();
+    ctx.restore();
+    ctx.font = '8px "JetBrains Mono"';
+    ctx.fillStyle = 'rgba(61,214,255,0.35)';
+    ctx.textAlign = 'center';
+    ctx.fillText('WIND', wx, wy + 18);
+  }
+
+  // Gravity direction indicator
+  if (gravityAngle !== Math.PI / 2) {
+    const gx = 80, gy = 80;
+    const ax = Math.cos(gravityAngle) * 15;
+    const ay = Math.sin(gravityAngle) * 15;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + ax, gy + ay); ctx.stroke();
+    ctx.beginPath(); ctx.arc(gx + ax, gy + ay, 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fill();
+    ctx.font = '8px "JetBrains Mono"';
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.textAlign = 'center';
+    ctx.fillText('GRAVITY', gx, gy + 28);
+  }
+}
+
+function drawTriangle(p1, p2, p3, gx, gy) {
+  const ax = p2.x - p1.x, ay = p2.y - p1.y;
+  const bx = p3.x - p1.x, by = p3.y - p1.y;
+  const cross = ax * by - ay * bx;
+  const light = Math.abs(cross) / (spacing * spacing * 3);
+  const brightness = Math.min(1, Math.max(0.15, light));
+
+  // Subtle gradient across cloth based on grid position
+  const gradX = gx / cols;
+  const gradY = gy / rows;
+
+  const r = Math.floor((clothColor.r + brightness * 80 + gradX * 20) * (0.7 + brightness * 0.3));
+  const g = Math.floor((clothColor.g + brightness * 75 + gradY * 15) * (0.7 + brightness * 0.3));
+  const b = Math.floor((clothColor.b + brightness * 65) * (0.7 + brightness * 0.3));
+  const a = 0.75 + brightness * 0.25;
+
+  ctx.fillStyle = `rgba(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)},${a})`;
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+let fps = 0, frameCount = 0, lastFpsTime = performance.now(), statTimer = 0;
+
+function loop() {
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    fps = frameCount;
+    frameCount = 0;
+    lastFpsTime = now;
+    document.getElementById('stat-fps').textContent = fps;
+  }
+
+  simulate();
+
+  statTimer++;
+  if (statTimer % 30 === 0) updateStats();
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+createCloth(scenes.default);
+setMaterial('cotton');
+loop();
+
+setTimeout(() => document.getElementById('hint').classList.add('hidden'), 6000);
+</script>
+</body>
+</html>
