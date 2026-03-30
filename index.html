@@ -354,7 +354,7 @@
       transform: translateX(-50%);
       z-index: 11;
       gap: 4px;
-      padding: 5px 6px;
+      padding: 5px 62px 5px 6px;
       background: rgba(20,20,24,0.92);
       backdrop-filter: blur(20px);
       border: 1px solid var(--border);
@@ -437,7 +437,14 @@
       height: 4px;
       border-radius: 2px;
       background: rgba(255,255,255,0.15);
-      margin: 0 auto 14px;
+      margin: -20px auto 14px;
+      padding: 20px 30px;
+      background-clip: content-box;
+      touch-action: none;
+      cursor: grab;
+    }
+    .mobile-sheet.dragging {
+      transition: none;
     }
 
     .mobile-sheet .sheet-section {
@@ -490,6 +497,28 @@
     }
     .mobile-sheet .sheet-slider-row .slider-val {
       min-width: 28px;
+    }
+
+    .fire-swatches {
+      display: flex;
+      gap: 10px;
+      padding: 4px 0;
+      flex-wrap: wrap;
+    }
+    .fire-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--swatch-color);
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+      flex-shrink: 0;
+    }
+    .fire-swatch.active {
+      border-color: #fff;
+      box-shadow: 0 0 12px var(--swatch-color);
+      transform: scale(1.15);
     }
   }
 </style>
@@ -643,6 +672,18 @@
       <button class="btn" onclick="resetCloth()">Reset</button>
     </div>
   </div>
+
+  <div class="sheet-section">
+    <div class="sheet-section-label">Flame Color</div>
+    <div class="fire-swatches">
+      <button class="fire-swatch active" id="fire-classic" style="--swatch-color:#ff9500" title="Classic" onclick="setFireColor('classic')"></button>
+      <button class="fire-swatch" id="fire-blue" style="--swatch-color:#3d8eff" title="Blue" onclick="setFireColor('blue')"></button>
+      <button class="fire-swatch" id="fire-green" style="--swatch-color:#39e065" title="Green" onclick="setFireColor('green')"></button>
+      <button class="fire-swatch" id="fire-purple" style="--swatch-color:#a855f7" title="Purple" onclick="setFireColor('purple')"></button>
+      <button class="fire-swatch" id="fire-white" style="--swatch-color:#e8e6e3" title="White" onclick="setFireColor('white')"></button>
+      <button class="fire-swatch" id="fire-pink" style="--swatch-color:#ff2d78" title="Pink" onclick="setFireColor('pink')"></button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -680,6 +721,40 @@ let paused = false;
 let slowMo = false;
 let currentScene = 'default';
 let currentMaterial = 'cotton';
+let currentFireColor = 'classic';
+
+const fireColors = {
+  classic: {
+    swatch: '#ff9500',
+    fire(t) { return { r: 255, g: Math.floor(150 + t * 100), b: Math.floor(t * 50) }; },
+    spark(t) { return `rgba(255,${Math.floor(200 + t * 55)},${Math.floor(150 + t * 100)},${t})`; }
+  },
+  blue: {
+    swatch: '#3d8eff',
+    fire(t) { return { r: Math.floor(t * 80), g: Math.floor(100 + t * 100), b: 255 }; },
+    spark(t) { return `rgba(${Math.floor(100 + t * 50)},${Math.floor(180 + t * 75)},255,${t})`; }
+  },
+  green: {
+    swatch: '#39e065',
+    fire(t) { return { r: Math.floor(t * 60), g: Math.floor(200 + t * 55), b: Math.floor(t * 80) }; },
+    spark(t) { return `rgba(${Math.floor(80 + t * 40)},${Math.floor(220 + t * 35)},${Math.floor(100 + t * 80)},${t})`; }
+  },
+  purple: {
+    swatch: '#a855f7',
+    fire(t) { return { r: Math.floor(180 + t * 75), g: Math.floor(t * 60), b: 255 }; },
+    spark(t) { return `rgba(${Math.floor(200 + t * 55)},${Math.floor(100 + t * 80)},255,${t})`; }
+  },
+  white: {
+    swatch: '#e8e6e3',
+    fire(t) { return { r: Math.floor(220 + t * 35), g: Math.floor(220 + t * 35), b: Math.floor(220 + t * 35) }; },
+    spark(t) { return `rgba(255,255,255,${t})`; }
+  },
+  pink: {
+    swatch: '#ff2d78',
+    fire(t) { return { r: 255, g: Math.floor(t * 80), b: Math.floor(120 + t * 60) }; },
+    spark(t) { return `rgba(255,${Math.floor(150 + t * 80)},${Math.floor(180 + t * 60)},${t})`; }
+  }
+};
 
 // ============================================================
 // MATERIALS
@@ -1375,6 +1450,54 @@ function toggleMobileMenu() {
   document.getElementById('mobile-fab').classList.toggle('open');
 }
 
+function setFireColor(key) {
+  currentFireColor = key;
+  document.querySelectorAll('.fire-swatch').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('fire-' + key);
+  if (el) el.classList.add('active');
+}
+
+function setupSheetDrag() {
+  const handle = document.querySelector('.mobile-sheet .sheet-handle');
+  const sheet = document.getElementById('mobile-sheet');
+  const overlay = document.getElementById('mobile-overlay');
+  if (!handle || !sheet) return;
+
+  let startY = 0, sheetHeight = 0, startTime = 0, currentDelta = 0;
+
+  handle.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startY = e.touches[0].clientY;
+    startTime = Date.now();
+    currentDelta = 0;
+    sheetHeight = sheet.getBoundingClientRect().height;
+    sheet.classList.add('dragging');
+
+    const onMove = (e2) => {
+      const deltaY = e2.touches[0].clientY - startY;
+      currentDelta = Math.max(0, deltaY);
+      sheet.style.transform = `translateY(${currentDelta}px)`;
+      if (overlay) overlay.style.opacity = Math.max(0, 1 - currentDelta / sheetHeight);
+    };
+
+    const onEnd = () => {
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      sheet.classList.remove('dragging');
+      sheet.style.transform = '';
+      if (overlay) overlay.style.opacity = '';
+
+      const velocity = currentDelta / (Date.now() - startTime);
+      if (currentDelta > sheetHeight * 0.3 || velocity > 0.5) {
+        toggleMobileMenu();
+      }
+    };
+
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }, { passive: false });
+}
+
 function updateStats() {
   document.getElementById('stat-pts').textContent = points.length;
   document.getElementById('stat-con').textContent = constraints.filter(c => c.active).length;
@@ -1550,10 +1673,10 @@ function render() {
   // Fire particles
   for (const fp of fireParticles) {
     const t = fp.life / fp.maxLife;
-    const r = 255, g = Math.floor(150 + t * 100), b = Math.floor(t * 50);
+    const fc = fireColors[currentFireColor].fire(t);
     ctx.beginPath();
     ctx.arc(fp.x, fp.y, fp.size * t, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${r},${g},${b},${t * 0.8})`;
+    ctx.fillStyle = `rgba(${fc.r},${fc.g},${fc.b},${t * 0.8})`;
     ctx.fill();
   }
 
@@ -1562,7 +1685,7 @@ function render() {
     const t = s.life / s.maxLife;
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.size * t, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,${Math.floor(200 + t * 55)},${Math.floor(150 + t * 100)},${t})`;
+    ctx.fillStyle = fireColors[currentFireColor].spark(t);
     ctx.fill();
   }
 
@@ -1732,6 +1855,7 @@ setMaterial('cotton');
 loop();
 
 setTimeout(() => document.getElementById('hint').classList.add('hidden'), 6000);
+setupSheetDrag();
 </script>
 </body>
 </html>
