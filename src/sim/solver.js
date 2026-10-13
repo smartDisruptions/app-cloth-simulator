@@ -579,6 +579,12 @@ export function expireWeak(S, cl) {
   }
 }
 
+// A crease sets only where the cloth is still: full rate at rest, none at CREEP_V (m/s) and faster; it relaxes at
+// any speed. Folds made mid-air (a flick, a fall) used to set while they flew, so a flicked cotton cloth landed
+// with its fold baked in and hung folded up on itself "like glue" (Josh, 2026-10-13). Crumpled on the floor, or
+// pressed and held, it still creases as before.
+const CREEP_V = 0.3, CREEP_IV2 = 1 / (CREEP_V * CREEP_V);
+
 /**
  * Plasticity: a bend held well past its yield slowly sets (its rest offset creeps toward the fold), so
  * crumpled cotton, denim and foil keep their creases. Flattening a crease past the yield relaxes it.
@@ -586,13 +592,15 @@ export function expireWeak(S, cl) {
 export function creep(S, cl, mat) {
   const rate = mat.crease * 2.5 * S.k[K_DT];
   if (!(rate > 0)) return;
-  const p = S.P, rest = cl.rest, N = S.bN, A = S.bA, M = S.bM, Cc = S.bC, H0 = S.bH0, J = S.bJ, yf = mat.creaseYield;
+  const p = S.P, v = S.V, rest = cl.rest, N = S.bN, A = S.bA, M = S.bM, Cc = S.bC, H0 = S.bH0, J = S.bJ, yf = mat.creaseYield;
   for (let k = 0; k < N; k++) {
     const a = A[k] * 3, m = M[k] * 3, c = Cc[k] * 3;
     const dx = p[m] - 0.5 * (p[a] + p[c]), dy = p[m + 1] - 0.5 * (p[a + 1] + p[c + 1]), dz = p[m + 2] - 0.5 * (p[a + 2] + p[c + 2]);
     const d = Math.sqrt(dx * dx + dy * dy + dz * dz), arm = 0.5 * rest[J[k]], y = yf * arm, h0 = H0[k];
     const ex = d - h0;
-    if (ex > y) { const t = h0 + (ex - y) * rate; H0[k] = t < 0.7 * arm ? t : 0.7 * arm; }
-    else if (ex < -y) { const t = h0 + (ex + y) * rate; H0[k] = t > 0 ? t : 0; }
+    if (ex > y) {
+      const s2 = (v[m] * v[m] + v[m + 1] * v[m + 1] + v[m + 2] * v[m + 2]) * CREEP_IV2;
+      if (s2 < 1) { const t = h0 + (ex - y) * rate * (1 - Math.sqrt(s2)); H0[k] = t < 0.7 * arm ? t : 0.7 * arm; }
+    } else if (ex < -y) { const t = h0 + (ex + y) * rate; H0[k] = t > 0 ? t : 0; }
   }
 }

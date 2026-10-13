@@ -161,7 +161,7 @@ export function step(world, dt) {
     // ~30× cotton's bending) chattered in still air at ~70–90 mm/s and never came to rest (2026-10-13)
     if (S.bendOn) { solveBend(S, p, w); if (S.xN) solveRawBend(S, p, w); }
     if (tethers && !S.tetherDirty) solveTethers(S.tether, p, w, cl.massScale);
-    if (S.self.pN) selfPushes = solveSelfPairs(S.self, p, w);
+    if (S.self.pN) selfPushes = solveSelfPairs(S.self, p, w, h);
     resolveContacts(world, cl, S, mat);
     K[K_TIME] += h;
     if (S.dirty) { compact(S, cl); S.tetherDirty = true; } // topology changed mid-frame: tethers wait for the next frame
