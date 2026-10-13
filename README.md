@@ -50,6 +50,22 @@ phone. It runs each scene for 240 frames, and halfway through it lights two fire
 and turns on the rain. It prints the JavaScript milliseconds of every frame, per system. A frame at 60 fps has
 16.7 ms.
 
+The run on 2026-10-13 kept the quality fixed at the low tier with the governor off, and it includes the stress half:
+
+| Scene | Mean | Median | Slowest 1 in 20 | Worst frame |
+|---|---|---|---|---|
+| Noren 暖簾 | 5.9 ms | 5.2 ms | 13.5 ms | 39.4 ms |
+| Koinobori 鯉のぼり | 5.9 ms | 5.0 ms | 14.6 ms | 23.0 ms |
+| Banner 幟 | 6.3 ms | 5.8 ms | 14.3 ms | 27.2 ms |
+| Unveiling 除幕 | 6.8 ms | 6.1 ms | 16.7 ms | 35.2 ms |
+| Embers 火の粉 | 4.6 ms | 3.8 ms | 11.8 ms | 39.4 ms |
+| Monsoon 梅雨 | 5.7 ms | 5.0 ms | 15.0 ms | 27.8 ms |
+
+The average frame uses about a third of its 16.7 ms. Physics takes 2.3–3.4 ms of that and drawing 1.5–2.2 ms.
+Weather, fire, particles, sound and the UI share the last millisecond. The slowest frames come when a cut or a
+burn changes the cloth's shape, and when the browser collects garbage. My own budget for those frames was 8 ms,
+and they run over it, so on a phone this slow the governor steps quality down.
+
 GPU time can't be measured headless, because Chromium rasterises on the CPU there. On a real device the governor
 measures it: it watches real frame times and steps quality down until the frame fits.
 
