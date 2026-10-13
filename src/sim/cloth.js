@@ -4,7 +4,7 @@
 //
 // A frame: copy in → grabs (fingers are anchors) → re-order / re-tether if anchors or topology changed →
 // masses (wet weight) → air forces → contact candidates → N substeps of [predict → pins → grabs →
-// stretch → shear → bend (half rate) → tethers → contacts] → velocities → guard → copy out → tearing
+// stretch → shear → bend → tethers → self-contacts → contacts] → velocities → guard → copy out → tearing
 // (on the converged shape) → creases → normals → aliases → stats. N targets a fixed substep
 // (1/(60·q.substeps) s), so a 120 Hz screen runs half as many per frame and the cost per second stays
 // put; q.substeps caps it when frames run long.
@@ -22,7 +22,7 @@ import { aero } from './aero.js';
 import { createGrabState, grabFrame, grabSub } from './grab.js';
 import { createContactState, findContacts, resolveContacts } from './collide.js';
 import { createTetherState, buildTethers, solveTethers, tightenTethers } from './tether.js';
-import { createSelfState, selfCollide } from './selfcollide.js';
+import { createSelfState, findSelfPairs, solveSelfPairs } from './selfcollide.js';
 
 const VMAX = 25;          // m/s: no particle ever moves faster (a last line against explosions)
 const SLICE_KICK = 0.45;  // m/s along the blade
@@ -138,6 +138,9 @@ export function step(world, dt) {
   refreshMass(S, cl);
   aero(world, cl, S, mat);
   findContacts(world, cl, S, mat);
+  // layers of cloth keep apart (approximate self-collision): pairs found once a frame, held every substep
+  if (SELF) findSelfPairs(S.self, cl, p, Math.max(0.006, Math.min(0.45 * S.meanEdge, 0.04))); else S.self.pN = 0;
+  let selfPushes = 0;
 
   const g = world.gravity;
   K[K_GX] = g[0] === g[0] ? g[0] : 0; K[K_GY] = g[1] === g[1] ? g[1] : -9.81; K[K_GZ] = g[2] === g[2] ? g[2] : 0;
@@ -145,7 +148,7 @@ export function step(world, dt) {
   let grabbing = false;
   for (let k = 0; k < S.grab.v.length; k++) if (S.grab.v[k] >= 0) grabbing = true;
   const tethers = S.tether.on;
-  let bendDue = 0;
+  K[K_IHB2] = ih * ih;
   for (let s = 0; s < sub; s++) {
     K[K_T] = (s + 1) / sub;
     predict(S, n, s > 0);
@@ -153,22 +156,18 @@ export function step(world, dt) {
     if (grabbing) grabSub(world, cl, S);
     if (S.freeCompress) solveStretchJam(S, p, w); else solveStretch(S, p, w);
     solveShear(S, p, w);
-    // bending is soft: solve it at half rate with the matching step (XPBD stays consistent: α/(2h)²)
-    if (S.bendOn && (++bendDue === 2 || s === sub - 1)) {
-      const hb = h * bendDue;
-      K[K_IHB2] = 1 / (hb * hb);
-      solveBend(S, p, w); if (S.xN) solveRawBend(S, p, w);
-      bendDue = 0;
-    }
+    // bending every substep. It once ran at half rate on an α/(2h)² step, but velocities are still read
+    // off each h-long substep, so every bend correction landed as a kick twice too big: stiff cloth (denim,
+    // ~30× cotton's bending) chattered in still air at ~70–90 mm/s and never came to rest (2026-10-13)
+    if (S.bendOn) { solveBend(S, p, w); if (S.xN) solveRawBend(S, p, w); }
     if (tethers && !S.tetherDirty) solveTethers(S.tether, p, w, cl.massScale);
+    if (S.self.pN) selfPushes = solveSelfPairs(S.self, p, w);
     resolveContacts(world, cl, S, mat);
     K[K_TIME] += h;
     if (S.dirty) { compact(S, cl); S.tetherDirty = true; } // topology changed mid-frame: tethers wait for the next frame
   }
   deriveVelocity(S, n);
-  // layers of cloth keep apart (approximate self-collision; every tier can afford it once a frame)
-  // self-collision every frame, or every other frame on the low tier (old phones)
-  if (SELF && (!world.q || world.q.name !== 'low' || (world.frame & 1) === 0)) S.selfPushes = selfCollide(S.self, cl, p, v, w, Math.max(0.006, Math.min(0.45 * S.meanEdge, 0.04)));
+  S.selfPushes = selfPushes;
   guard(world, cl, S);
   // copy out: the world sees the new state (Float32 for GL and everyone else)
   cl.pos.set(p); cl.prev.set(q); cl.vel.set(v); cl.force.set(f);

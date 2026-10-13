@@ -78,6 +78,12 @@ export function resolveContacts(world, cl, S, mat) {
       const d = Math.sqrt(d2), inv = 1 / d;
       nx = dx * inv; ny = dy * inv; nz = dz * inv; depth = R - d; mu = C.friction == null ? mu0 : C.friction;
     }
+    // Only this substep's own motion into the surface becomes velocity. Depth the particle already had at the
+    // substep's start (q) is corrected in q as well, so it leaves without a kick: self-collision pushing the
+    // bottom of a crumpled sheet into the floor once cost depth/h, metres per second every frame, and a
+    // sheet lying on the ground never stopped churning (2026-10-13)
+    const pre = depth + (p[o] - q[o]) * nx + (p[o + 1] - q[o + 1]) * ny + (p[o + 2] - q[o + 2]) * nz;
+    if (pre > 0) { const e = pre < depth ? pre : depth; q[o] += nx * e; q[o + 1] += ny * e; q[o + 2] += nz * e; }
     p[o] += nx * depth; p[o + 1] += ny * depth; p[o + 2] += nz * depth;
     // Coulomb friction on this substep's sliding: stick below μs·depth, else lose μk·depth of it
     const mx = p[o] - q[o], my = p[o + 1] - q[o + 1], mz = p[o + 2] - q[o + 2];

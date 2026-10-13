@@ -50,18 +50,18 @@ phone. It runs each scene for 240 frames, and halfway through it lights two fire
 and turns on the rain. It prints the JavaScript milliseconds of every frame, per system. A frame at 60 fps has
 16.7 ms.
 
-The run on 2026-10-13 kept the quality fixed at the low tier with the governor off, and it includes the stress half:
+The latest run (2026-10-13) kept the quality fixed at the low tier with the governor off, and it includes the stress half:
 
 | Scene | Mean | Median | Slowest 1 in 20 | Worst frame |
 |---|---|---|---|---|
-| Noren 暖簾 | 5.9 ms | 5.2 ms | 13.5 ms | 39.4 ms |
-| Koinobori 鯉のぼり | 5.9 ms | 5.0 ms | 14.6 ms | 23.0 ms |
-| Banner 幟 | 6.3 ms | 5.8 ms | 14.3 ms | 27.2 ms |
-| Unveiling 除幕 | 6.8 ms | 6.1 ms | 16.7 ms | 35.2 ms |
-| Embers 火の粉 | 4.6 ms | 3.8 ms | 11.8 ms | 39.4 ms |
-| Monsoon 梅雨 | 5.7 ms | 5.0 ms | 15.0 ms | 27.8 ms |
+| Noren 暖簾 | 5.2 ms | 4.3 ms | 12.9 ms | 31.0 ms |
+| Koinobori 鯉のぼり | 4.5 ms | 4.2 ms | 10.0 ms | 18.0 ms |
+| Banner 幟 | 5.6 ms | 5.4 ms | 11.4 ms | 35.8 ms |
+| Unveiling 除幕 | 5.5 ms | 5.1 ms | 11.4 ms | 21.4 ms |
+| Embers 火の粉 | 4.1 ms | 3.6 ms | 10.9 ms | 17.3 ms |
+| Monsoon 梅雨 | 4.0 ms | 3.9 ms | 8.4 ms | 25.8 ms |
 
-The average frame uses about a third of its 16.7 ms. Physics takes 2.3–3.4 ms of that and drawing 1.5–2.2 ms.
+The average frame uses a quarter to a third of its 16.7 ms. Physics takes 1.8–3.2 ms of that and drawing 1.2–1.5 ms.
 Weather, fire, particles, sound and the UI share about one more millisecond. The slowest frames come when a cut or a
 burn changes the cloth's shape, and when the browser collects garbage. My own budget for those frames was 8 ms,
 and they run over it, so on a phone this slow the governor steps quality down.
@@ -76,6 +76,7 @@ npm install
 node build.mjs                                            # → index.html
 node tests/smoke.mjs                                      # every scene × every tool; fails on any console error
 node tests/perf.mjs --throttle 4 --quality low --stress   # JS cost per frame on a 4× slowed CPU
+node tests/lead-rest.mjs                                  # cloth left alone comes to rest
 ```
 
 The tests drive headless Chromium through Playwright. On the live page, `?stats=1` opens the Stats panel on load,
