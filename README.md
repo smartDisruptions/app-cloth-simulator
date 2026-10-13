@@ -62,7 +62,7 @@ The run on 2026-10-13 kept the quality fixed at the low tier with the governor o
 | Monsoon 梅雨 | 5.7 ms | 5.0 ms | 15.0 ms | 27.8 ms |
 
 The average frame uses about a third of its 16.7 ms. Physics takes 2.3–3.4 ms of that and drawing 1.5–2.2 ms.
-Weather, fire, particles, sound and the UI share the last millisecond. The slowest frames come when a cut or a
+Weather, fire, particles, sound and the UI share about one more millisecond. The slowest frames come when a cut or a
 burn changes the cloth's shape, and when the browser collects garbage. My own budget for those frames was 8 ms,
 and they run over it, so on a phone this slow the governor steps quality down.
 
