@@ -1,0 +1,3 @@
+# Only the built page deploys. The source, tests and contract live in the repo; `node build.mjs` makes index.html.
+/*
+!index.html

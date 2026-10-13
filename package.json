@@ -1,0 +1,12 @@
+{
+  "name": "cloth-sim",
+  "private": true,
+  "type": "module",
+  "description": "Cloth Simulator, rebuilt: WebGL cloth with fire, rain, wind, dye and coloured light, built into one self-contained index.html",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
