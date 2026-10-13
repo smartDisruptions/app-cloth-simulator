@@ -1,21 +1,22 @@
-// Tilt: the phone's orientation becomes world.gravity, rotated into the camera's frame, so tilting the
-// phone left swings the cloth left on screen and laying it flat swings the cloth away from you. "Level"
-// is however the phone was held when Tilt was switched on (and again after the screen rotates), so it
-// works lying in bed as well as standing up. Also a small parallax signal for the camera (ui/input.js).
+// Tilt: the phone's real gravity becomes world.gravity, turned into the camera's frame. Hold the phone
+// upright and the cloth hangs straight down the screen; tilt it left and the cloth swings left; lay it flat
+// and gravity points into the scene, so the cloth swings away from you. (Until 2026-10-13 "level" was
+// however the phone was held when Tilt was switched on, so switching it on with the phone on a table made
+// flat the hanging pose. Josh: upright should hang.) Also a small parallax signal for the camera
+// (ui/input.js) that follows the phone's movement and settles back while it is held still.
 //
 // iOS needs DeviceOrientationEvent.requestPermission() from a tap; desktops expose the event but never
 // fire it. Both end in bus.tiltState(-2 | -1) and the HUD turns the toggle off with a short note.
 import { bus } from './bus.js';
 
 const D2R = Math.PI / 180;
-const GAIN = 1.4;                   // world tilt = phone tilt × GAIN (1 would be literal)
 let listening = false, state = 0;   // 0 off · 1 waiting for a first reading · 2 live
-let calibrated = false, angle = 0;
+let primed = false, angle = 0;      // primed: the parallax baseline has its first reading
 const M = new Float64Array(2);   // [0] gravity strength · [1] seconds of frame time spent waiting for a reading
 M[0] = 9.81;
 const g = new Float32Array(3);      // latest gravity in screen axes (x right, y up, z out of the glass), unit
-const Q = new Float32Array(9);      // rotation taking the neutral gravity to (0, -1, 0)
-const a = new Float32Array(3);      // smoothed neutral-relative gravity, screen axes
+const a = new Float32Array(3);      // smoothed gravity, screen axes
+const base = new Float32Array(2);   // slow average of the sideways and in/out gravity: the parallax rests on it
 /** Parallax signal for the camera, each about -1..1 (0 when Tilt is off): sideways, and up. */
 export const par = new Float32Array(2);
 
@@ -23,7 +24,7 @@ export const supported = () => typeof window !== 'undefined' && typeof window.De
 
 export function init() {
   readAngle();
-  const re = () => { readAngle(); calibrated = false; };
+  const re = () => { readAngle(); primed = false; };
   window.addEventListener('orientationchange', re);
   try { if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', re); } catch (e) { /* old browsers */ }
 }
@@ -47,7 +48,7 @@ export function start() {
 
 export function stop() {
   if (listening) { window.removeEventListener('deviceorientation', onOrient); listening = false; }
-  state = 0; calibrated = false;
+  state = 0; primed = false;
   par[0] = par[1] = 0;
 }
 
@@ -55,7 +56,7 @@ export const live = () => state === 2;
 
 function listen() {
   if (!listening) { window.addEventListener('deviceorientation', onOrient); listening = true; }
-  state = 1; calibrated = false; M[1] = 0;
+  state = 1; primed = false; M[1] = 0;
   a[0] = 0; a[1] = -1; a[2] = 0;
   readAngle();
 }
@@ -82,25 +83,7 @@ function onOrient(e) {
   let sx = x, sy = y;
   if (angle === 90) { sx = -y; sy = x; } else if (angle === 180) { sx = -x; sy = -y; } else if (angle === 270) { sx = y; sy = -x; }
   g[0] = sx; g[1] = sy; g[2] = z;
-  if (!calibrated) { calibrate(); calibrated = true; }
   if (state === 1) { state = 2; bus.tiltState(1); }
-}
-
-/** Q = the rotation (Rodrigues) that takes the current gravity to straight down the screen. */
-function calibrate() {
-  const nx = g[0], ny = g[1], nz = g[2];
-  let kx = nz, kz = -nx;            // n × (0, -1, 0)
-  const s = Math.sqrt(kx * kx + kz * kz), c = -ny;
-  if (s < 1e-5) {
-    Q.fill(0); Q[0] = 1;
-    if (c > 0) { Q[4] = 1; Q[8] = 1; } else { Q[4] = -1; Q[8] = -1; }
-    return;
-  }
-  kx /= s; kz /= s;
-  const t = 1 - c;
-  Q[0] = c + t * kx * kx; Q[1] = -s * kz;  Q[2] = t * kx * kz;
-  Q[3] = s * kz;          Q[4] = c;        Q[5] = -s * kx;
-  Q[6] = t * kx * kz;     Q[7] = s * kx;   Q[8] = c + t * kz * kz;
 }
 
 /** Per frame (ui/input.js): write world.gravity while Tilt is on and the sensor is live. */
@@ -109,21 +92,11 @@ export function update(world) {
   if (state === 1) { M[1] += world.frameDt; if (M[1] > 1.6) fail(-1); return; }
   const dt = world.frameDt;
   if (state !== 2 || !world.toggles.tilt) { par[0] = par[1] = 0; return; }
-  const rx = Q[0] * g[0] + Q[1] * g[1] + Q[2] * g[2];
-  const ry = Q[3] * g[0] + Q[4] * g[1] + Q[5] * g[2];
-  const rz = Q[6] * g[0] + Q[7] * g[1] + Q[8] * g[2];
+  if (!primed) { a[0] = g[0]; a[1] = g[1]; a[2] = g[2]; base[0] = g[0]; base[1] = g[2]; primed = true; }
   const k = 1 - Math.exp(-dt * 12);   // sensors jitter; cloth has weight
-  a[0] += (rx - a[0]) * k; a[1] += (ry - a[1]) * k; a[2] += (rz - a[2]) * k;
+  a[0] += (g[0] - a[0]) * k; a[1] += (g[1] - a[1]) * k; a[2] += (g[2] - a[2]) * k;
   const l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1;
-  let ax = a[0] / l, ay = a[1] / l, az = a[2] / l;
-  // A little gain on the angle away from level, so a natural wrist tilt visibly swings the cloth.
-  const h = Math.sqrt(ax * ax + az * az);
-  if (h > 1e-5) {
-    let phi = Math.atan2(h, -ay) * GAIN;
-    if (phi > Math.PI) phi = Math.PI;
-    const s = Math.sin(phi) / h;
-    ax *= s; az *= s; ay = -Math.cos(phi);
-  }
+  const ax = a[0] / l, ay = a[1] / l, az = a[2] / l;
   // screen axes → world: right = the camera's right (level), up = world up, out = toward the viewer, level
   const R = world.camera.right, F = world.camera.fwd;
   let rxw = R[0], rzw = R[2];
@@ -135,5 +108,10 @@ export function update(world) {
   G[0] = mag * (ax * rxw + az * bx);
   G[1] = mag * ay;
   G[2] = mag * (ax * rzw + az * bz);
-  par[0] = ax; par[1] = -az;
+  // parallax: how far the phone has moved from where it has been resting lately (a ~1.5 s average), so
+  // holding it at any angle leaves the camera centred and moving it gives the scene a little depth
+  const kb = 1 - Math.exp(-dt * 0.7);
+  base[0] += (ax - base[0]) * kb; base[1] += (az - base[1]) * kb;
+  const px = ax - base[0], py = base[1] - az;
+  par[0] = px > 1 ? 1 : px < -1 ? -1 : px; par[1] = py > 1 ? 1 : py < -1 ? -1 : py;
 }

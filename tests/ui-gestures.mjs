@@ -137,9 +137,10 @@ const RETURNING = () => { try { localStorage.setItem('cloth-sim:ui:v1', JSON.str
   await page.keyboard.press('5'); keys.five = await page.evaluate(() => window.__cloth.world.tool);
   await page.keyboard.press('s'); keys.s = await page.evaluate(() => window.__cloth.world.toggles.stats);
   await page.keyboard.press('Space'); keys.space = await page.evaluate(() => window.__cloth.world.toggles.slowmo);
+  const w0 = await page.evaluate(() => window.__cloth.world.toggles.wind);   // the scene's own level (Embers starts still)
   await page.keyboard.press('w'); keys.w = await page.evaluate(() => window.__cloth.world.toggles.wind);
   await page.keyboard.press(']'); keys.next = await page.evaluate(() => window.__cloth.world.sceneId);
-  ok(keys.two === 'slice' && keys.five === 'dye' && keys.s === true && keys.space === true && keys.w === 2 && keys.next === 'monsoon', 'keyboard: 1–5, S, Space, W, ]', JSON.stringify(keys));
+  ok(keys.two === 'slice' && keys.five === 'dye' && keys.s === true && keys.space === true && keys.w === (w0 + 1) % 3 && keys.next === 'monsoon', 'keyboard: 1–5, S, Space, W, ]', JSON.stringify(keys));
 
   // real taps on the HUD
   await tapEl(page, '.tool[data-tool="burn"]'); const tTool = await page.evaluate(() => window.__cloth.world.tool);
@@ -187,17 +188,24 @@ const RETURNING = () => { try { localStorage.setItem('cloth-sim:ui:v1', JSON.str
   await advance(page, 10);
   await tapEl(page, '.tg[data-t="tilt"]', 1);
   const fire = (beta, gamma) => page.evaluate(([b, g]) => window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { alpha: 0, beta: b, gamma: g })), [beta, gamma]);
-  await fire(60, 0); await advance(page, 30);                  // neutral: held at 60°
+  // real gravity, not "however it was held": upright hangs, flat falls into the scene (Josh, 2026-10-13)
+  const down = () => page.evaluate(() => -window.__cloth.world.gravity[1]);
+  const into = () => page.evaluate(() => { const W = window.__cloth.world, g = W.gravity, F = W.camera.fwd; return g[0] * F[0] + g[2] * F[2]; });
+  const leftward = () => page.evaluate(() => { const W = window.__cloth.world, g = W.gravity, R = W.camera.right; return g[0] * R[0] + g[1] * R[1] + g[2] * R[2]; });
+  await fire(0, 0); await advance(page, 30);                   // switched on lying flat on a table
   const g0 = await page.evaluate(() => { const W = window.__cloth.world; return [...W.gravity].concat([W.toggles.tilt]); });
-  await fire(60, -35); await advance(page, 40);                // tilt left
-  const left = await page.evaluate(() => { const W = window.__cloth.world, g = W.gravity, R = W.camera.right; return g[0] * R[0] + g[1] * R[1] + g[2] * R[2]; });
-  await fire(25, 0); await advance(page, 40);                  // lay it back: gravity into the screen
-  const back = await page.evaluate(() => { const W = window.__cloth.world, g = W.gravity, F = W.camera.fwd; return g[0] * F[0] + g[2] * F[2]; });
+  const flatInto = await into(), flatDown = await down();
+  await fire(90, 0); await advance(page, 40);                  // pick it up and hold it upright
+  const upDown = await down(), upInto = await into();
   const off = await page.evaluate(() => [...window.__cloth.world.cameraRig.uiOffset].map((v) => +v.toFixed(3)));
-  ok(g0[3] === true && Math.abs(g0[1] + 9.81) < 0.2, 'tilt: on, and level is how the phone was held', JSON.stringify(g0.map((v) => (typeof v === 'number' ? +v.toFixed(2) : v))));
-  ok(left < -3.5, 'tilt the phone left: gravity pulls left on screen', left.toFixed(2));
-  ok(back > 3, 'lay it back: gravity pulls into the scene', back.toFixed(2));
-  ok(Math.hypot(...off) > 0.01, 'tilt adds a little parallax to the camera', JSON.stringify(off));
+  await advance(page, 420);                                    // hold it there: the parallax settles back
+  const offRest = await page.evaluate(() => Math.hypot(...window.__cloth.world.cameraRig.uiOffset));
+  await fire(55, -89.9); await advance(page, 40);              // upright, rolled 35° to the left
+  const left = await leftward();
+  ok(g0[3] === true && flatInto > 9 && Math.abs(flatDown) < 1, 'tilt on lying flat: gravity points into the scene', JSON.stringify([flatInto.toFixed(2), flatDown.toFixed(2)]));
+  ok(upDown > 9.6 && Math.abs(upInto) < 0.6, 'held upright: the cloth hangs straight down', JSON.stringify([upDown.toFixed(2), upInto.toFixed(2)]));
+  ok(left < -4.5, 'rolled left: gravity pulls left on screen', left.toFixed(2));
+  ok(Math.hypot(...off) > 0.01 && offRest < 0.01, 'moving the phone adds parallax, holding still lets it settle', JSON.stringify([off, +offRest.toFixed(4)]));
   await tapEl(page, '.tg[data-t="tilt"]', 90);
   const g1 = await page.evaluate(() => [...window.__cloth.world.gravity].map((v) => +v.toFixed(2)));
   const off1 = await page.evaluate(() => Math.hypot(...window.__cloth.world.cameraRig.uiOffset));

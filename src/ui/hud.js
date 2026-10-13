@@ -325,7 +325,7 @@ function onTiltState(code) {
   if (code === 1) {
     markTilt(0);
     const fresh = teach('tilt');
-    note(fresh ? 'Tilt the phone. Gravity follows. However you’re holding it now is level.' : 'Tilt on', fresh ? 3.6 : 1.4);
+    note(fresh ? 'Gravity follows your phone. Hold it upright and the cloth hangs straight down.' : 'Tilt on', fresh ? 3.6 : 1.4);
     return;
   }
   if (W.toggles.tilt) W.api.setToggle('tilt', false);
