@@ -98,8 +98,10 @@ function interior(P) {
 export default {
   id: 'noren', name: 'Noren', kanji: '暖簾', blurb: 'A shop curtain at dusk with the lamps lit behind it.',
   print: 'noren',
-  defaults: { material: 'cotton', tool: 'grab', wind: 1, rain: false },
-  // a breeze running along the street, a little out of the shop: the panels sway and ripple rather than fly
+  // the app opens here, in still air (Josh, 2026-10-13): the curtain hangs at rest until you touch it
+  defaults: { material: 'cotton', tool: 'grab', wind: 0, rain: false },
+  // with the wind on, a breeze running along the street, a little out of the shop: the panels sway and ripple
+  // rather than fly
   // (face-on, even a 2.8 m/s breeze outweighs light cotton three to one)
   windDir: [1, 0, 0.25],
   build(world, b, res) {
