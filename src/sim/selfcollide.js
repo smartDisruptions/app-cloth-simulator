@@ -12,6 +12,13 @@
 // the layer below, so a sheet lying on the floor churned and popped forever.)
 const HX = 73856093, HY = 19349663, HZ = 83492791, BIAS = 1 << 20; // linear hash: neighbours = base ± axis step
 const REACH = 1.5;   // pairs are gathered out to 1.5 × the contact distance: room for this frame's approach
+// The most a pair is pushed apart per second (m/s), so per substep: VSEP × h. A layer resting on another needs
+// only g·h² a substep (0.08 mm on the low tier), far under it, so piles still lie still. A fold whose threads
+// went through the cloth during a fast flick hooks there, and the whole hanging fold pulls on that hook; held
+// at full strength (the 2026-10-13 rebuild) it stayed hooked and the fold stuck up "like glue" (Josh). Capped,
+// the hook gives and the fold falls through and hangs free. A layer hitting another faster than this passes
+// through it, as the once-a-frame version always let it.
+const VSEP = 0.15;
 
 export function createSelfState(n) {
   let size = 64; while (size < 2 * n) size <<= 1;
@@ -72,10 +79,12 @@ export function findSelfPairs(X, cl, p, r) {
 }
 
 /**
- * Every substep: push this frame's pairs apart to their contact distance (a one-sided distance constraint,
- * so they never pull). w: inverse masses (0 = kinematic: pushes, isn't pushed). Returns the pairs pushed.
+ * Every substep: push this frame's pairs apart toward their contact distance (a one-sided distance
+ * constraint, so they never pull), by at most VSEP × h. w: inverse masses (0 = kinematic: pushes, isn't
+ * pushed). h: the substep (s). Returns the pairs pushed.
  */
-export function solveSelfPairs(X, p, w) {
+export function solveSelfPairs(X, p, w, h) {
+  const cap = VSEP * h;
   const N = X.pN, A = X.pA, B = X.pB, Rr = X.pR;
   let pushes = 0;
   for (let k = 0; k < N; k++) {
@@ -84,7 +93,7 @@ export function solveSelfPairs(X, p, w) {
     if (d2 >= rr * rr || d2 < 1e-14) continue;
     const wi = w[i], wj = w[j], ws = wi + wj;
     if (ws === 0) continue;
-    const d = Math.sqrt(d2), s = (rr - d) / (d * ws);
+    const d = Math.sqrt(d2), gap = rr - d, s = (gap < cap ? gap : cap) / (d * ws);
     p[o] -= ex * s * wi; p[o + 1] -= ey * s * wi; p[o + 2] -= ez * s * wi;
     p[jo] += ex * s * wj; p[jo + 1] += ey * s * wj; p[jo + 2] += ez * s * wj;
     pushes++;
